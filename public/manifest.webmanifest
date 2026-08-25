@@ -1,22 +1,24 @@
 {
+  "id": "/CRPay/",
   "name": "CRPay",
   "short_name": "CRPay",
   "description": "Gestão de crédito, clientes e pagamentos",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/CRPay/",
+  "scope": "/CRPay/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#FAF5FF",
   "theme_color": "#6A1B9A",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "./icons/icon-192.svg",
+      "src": "/CRPay/icons/icon-192.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "./icons/icon-512.svg",
+      "src": "/CRPay/icons/icon-512.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
