@@ -1,4 +1,4 @@
-const CACHE = 'crpay-v4';
+const CACHE = 'crpay-v5';
 const OFFLINE = './index.html';
 
 self.addEventListener('install', (event) => {
@@ -15,12 +15,32 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .then((response) => {
+          const copy = response.clone();
+          event.waitUntil(caches.open(CACHE).then((cache) => cache.put(OFFLINE, copy)));
+          return response;
+        })
+        .catch(() => caches.match(OFFLINE))
+    );
+    return;
+  }
+
   event.respondWith(
-    fetch(event.request, { cache: 'no-store' }).catch(async () => {
-      const cached = await caches.match(event.request);
-      return cached || caches.match(OFFLINE);
-    })
+    fetch(event.request)
+      .then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          event.waitUntil(caches.open(CACHE).then((cache) => cache.put(event.request, copy)));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
