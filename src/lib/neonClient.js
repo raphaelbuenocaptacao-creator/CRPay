@@ -11,27 +11,21 @@ const client = createClient({
   },
 });
 
-const originalSignInEmail = client.auth.signIn.email.bind(client.auth.signIn);
 const originalSignUpEmail = client.auth.signUp.email.bind(client.auth.signUp);
 
-client.auth.signIn.email = async (payload) => {
+client.auth.signUp.email = async (payload) => {
   const email = String(payload?.email || '').trim();
-  const result = await originalSignInEmail({ ...payload, email });
 
-  if (!result?.error || email.toLowerCase() !== ADMIN_EMAIL) return result;
+  if (email.toLowerCase() === ADMIN_EMAIL) {
+    return {
+      data: null,
+      error: {
+        message: 'A conta administrativa não pode ser criada pela tela pública.',
+      },
+    };
+  }
 
-  const signup = await originalSignUpEmail({
-    name: 'Administrador CRPay',
-    email,
-    password: payload.password,
-  });
-
-  if (!signup?.error) return signup;
-
-  return {
-    ...result,
-    error: signup.error,
-  };
+  return originalSignUpEmail({ ...payload, email });
 };
 
 export const neon = client;
