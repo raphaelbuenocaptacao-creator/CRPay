@@ -1,9 +1,17 @@
-const CACHE = 'crpay-v6';
+const CACHE = 'crpay-v7';
 const OFFLINE = './index.html';
-const PRIVATE_PATHS = ['/api/', '/auth/', '/admin/'];
+const APP_SHELL = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './icons/icon-192.svg',
+  './icons/icon-512.svg',
+  './icons/icon-512-maskable.svg',
+];
+const PRIVATE_PATH = /\/(api|auth|login|logout|admin|session|sessions|token|tokens|account|profile|me)(\/|$)/i;
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.add(OFFLINE)));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)));
   self.skipWaiting();
 });
 
@@ -16,38 +24,40 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-function isPrivateRequest(request, url) {
+function bypass(request, url) {
   if (request.method !== 'GET') return true;
   if (request.headers.has('authorization')) return true;
   if (url.origin !== self.location.origin) return true;
-  return PRIVATE_PATHS.some((path) => url.pathname.includes(path));
+  if (PRIVATE_PATH.test(url.pathname)) return true;
+  return false;
 }
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
-  if (isPrivateRequest(request, url)) return;
+  if (bypass(request, url)) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request, { cache: 'no-store' })
+        .then((response) => response)
         .catch(() => caches.match(OFFLINE))
     );
     return;
   }
 
+  const allowedStatic = APP_SHELL.some((path) => {
+    const absolute = new URL(path, self.registration.scope).href;
+    return request.url === absolute;
+  });
+  if (!allowedStatic) return;
+
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((response) => {
-          if (response.ok && response.type === 'basic') {
-            const copy = response.clone();
-            event.waitUntil(caches.open(CACHE).then((cache) => cache.put(request, copy)));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+      if (!response.ok || response.type !== 'basic') return response;
+      const copy = response.clone();
+      event.waitUntil(caches.open(CACHE).then((cache) => cache.put(request, copy)));
+      return response;
+    }))
   );
 });
