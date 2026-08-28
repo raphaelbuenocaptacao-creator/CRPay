@@ -1,5 +1,6 @@
-const CACHE = 'crpay-v5';
+const CACHE = 'crpay-v6';
 const OFFLINE = './index.html';
+const PRIVATE_PATHS = ['/api/', '/auth/', '/admin/'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.add(OFFLINE)));
@@ -8,39 +9,45 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+    Promise.all([
+      caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))),
+      self.clients.claim(),
+    ])
   );
-  self.clients.claim();
 });
 
+function isPrivateRequest(request, url) {
+  if (request.method !== 'GET') return true;
+  if (request.headers.has('authorization')) return true;
+  if (url.origin !== self.location.origin) return true;
+  return PRIVATE_PATHS.some((path) => url.pathname.includes(path));
+}
+
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+  const request = event.request;
+  const url = new URL(request.url);
+  if (isPrivateRequest(request, url)) return;
 
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
-
-  if (event.request.mode === 'navigate') {
+  if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request, { cache: 'no-store' })
-        .then((response) => {
-          const copy = response.clone();
-          event.waitUntil(caches.open(CACHE).then((cache) => cache.put(OFFLINE, copy)));
-          return response;
-        })
+      fetch(request, { cache: 'no-store' })
         .catch(() => caches.match(OFFLINE))
     );
     return;
   }
 
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          event.waitUntil(caches.open(CACHE).then((cache) => cache.put(event.request, copy)));
-        }
-        return response;
-      })
-      .catch(() => caches.match(event.request))
+    caches.match(request).then((cached) => {
+      const network = fetch(request)
+        .then((response) => {
+          if (response.ok && response.type === 'basic') {
+            const copy = response.clone();
+            event.waitUntil(caches.open(CACHE).then((cache) => cache.put(request, copy)));
+          }
+          return response;
+        })
+        .catch(() => cached);
+      return cached || network;
+    })
   );
 });
