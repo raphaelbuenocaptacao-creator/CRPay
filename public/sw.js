@@ -1,4 +1,4 @@
-const CACHE = 'crpay-v7';
+const CACHE = 'crpay-v8-safe-shell';
 const OFFLINE = './index.html';
 const APP_SHELL = [
   './',
@@ -8,7 +8,7 @@ const APP_SHELL = [
   './icons/icon-512.svg',
   './icons/icon-512-maskable.svg',
 ];
-const PRIVATE_PATH = /\/(api|auth|login|logout|admin|session|sessions|token|tokens|account|profile|me)(\/|$)/i;
+const PRIVATE_PATH = /\/(api|auth|login|logout|admin|session|sessions|token|tokens|password|account|profile|me)(\/|$)/i;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)));
@@ -53,7 +53,7 @@ self.addEventListener('fetch', (event) => {
   if (!allowedStatic) return;
 
   event.respondWith(
-    caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+    caches.match(request).then((cached) => cached || fetch(request, { cache: 'no-store' }).then((response) => {
       if (!response.ok || response.type !== 'basic') return response;
       const copy = response.clone();
       event.waitUntil(caches.open(CACHE).then((cache) => cache.put(request, copy)));
