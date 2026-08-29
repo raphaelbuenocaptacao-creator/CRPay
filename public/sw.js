@@ -1,4 +1,4 @@
-const CACHE = 'crpay-v8-safe-shell';
+const CACHE = 'crpay-v9-safe-shell';
 const OFFLINE = './index.html';
 const APP_SHELL = [
   './',
@@ -9,6 +9,7 @@ const APP_SHELL = [
   './icons/icon-512-maskable.svg',
 ];
 const PRIVATE_PATH = /\/(api|auth|login|logout|admin|session|sessions|token|tokens|password|account|profile|me)(\/|$)/i;
+const PRIVATE_QUERY = /(token|access_token|refresh_token|password|secret|session|auth|authorization|api_key|apikey|key)=/i;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)));
@@ -27,8 +28,10 @@ self.addEventListener('activate', (event) => {
 function bypass(request, url) {
   if (request.method !== 'GET') return true;
   if (request.headers.has('authorization')) return true;
+  if (request.headers.has('cookie')) return true;
   if (url.origin !== self.location.origin) return true;
   if (PRIVATE_PATH.test(url.pathname)) return true;
+  if (PRIVATE_QUERY.test(url.search)) return true;
   return false;
 }
 
@@ -45,6 +48,8 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
+
+  if (url.search) return;
 
   const allowedStatic = APP_SHELL.some((path) => {
     const absolute = new URL(path, self.registration.scope).href;
