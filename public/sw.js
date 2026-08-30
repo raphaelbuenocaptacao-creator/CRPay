@@ -1,4 +1,4 @@
-const CACHE = 'crpay-v9-safe-shell';
+const CACHE = 'crpay-v10-safe-shell';
 const OFFLINE = './index.html';
 const APP_SHELL = [
   './',
@@ -9,7 +9,10 @@ const APP_SHELL = [
   './icons/icon-512-maskable.svg',
 ];
 const PRIVATE_PATH = /\/(api|auth|login|logout|admin|session|sessions|token|tokens|password|account|profile|me)(\/|$)/i;
-const PRIVATE_QUERY = /(token|access_token|refresh_token|password|secret|session|auth|authorization|api_key|apikey|key)=/i;
+const SENSITIVE_QUERY_KEYS = new Set([
+  'token', 'access_token', 'refresh_token', 'password', 'passwd', 'secret', 'session',
+  'auth', 'authorization', 'api_key', 'apikey', 'key', 'code', 'credential', 'credentials',
+]);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)));
@@ -25,13 +28,20 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+function hasSensitiveQuery(url) {
+  for (const key of url.searchParams.keys()) {
+    if (SENSITIVE_QUERY_KEYS.has(String(key).toLowerCase())) return true;
+  }
+  return false;
+}
+
 function bypass(request, url) {
   if (request.method !== 'GET') return true;
   if (request.headers.has('authorization')) return true;
   if (request.headers.has('cookie')) return true;
   if (url.origin !== self.location.origin) return true;
   if (PRIVATE_PATH.test(url.pathname)) return true;
-  if (PRIVATE_QUERY.test(url.search)) return true;
+  if (hasSensitiveQuery(url)) return true;
   return false;
 }
 
