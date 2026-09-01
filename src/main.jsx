@@ -10,12 +10,41 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 );
 
 const secureServiceWorkerOrigin = window.location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const baseUrl = import.meta.env.BASE_URL || '/';
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+});
+
+window.CRPayPWA = {
+  async install() {
+    if (!deferredInstallPrompt) return false;
+    deferredInstallPrompt.prompt();
+    const choice = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    return choice.outcome === 'accepted';
+  },
+};
 
 if ('serviceWorker' in navigator && secureServiceWorkerOrigin) {
   window.addEventListener('load', async () => {
     try {
-      const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { updateViaCache: 'none' });
+      const registration = await navigator.serviceWorker.register(`${baseUrl}sw.js`, {
+        scope: baseUrl,
+        updateViaCache: 'none',
+      });
       await registration.update();
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') registration.update().catch(() => {});
+      });
+
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
