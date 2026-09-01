@@ -1,4 +1,5 @@
-const CACHE = 'crpay-v10-safe-shell';
+const CACHE_PREFIX = 'crpay-';
+const CACHE = `${CACHE_PREFIX}v11-safe-shell`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   './',
@@ -13,20 +14,6 @@ const SENSITIVE_QUERY_KEYS = new Set([
   'token', 'access_token', 'refresh_token', 'password', 'passwd', 'secret', 'session',
   'auth', 'authorization', 'api_key', 'apikey', 'key', 'code', 'credential', 'credentials',
 ]);
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)));
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    Promise.all([
-      caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))),
-      self.clients.claim(),
-    ])
-  );
-});
 
 function hasSensitiveQuery(url) {
   for (const key of url.searchParams.keys()) {
@@ -45,6 +32,43 @@ function bypass(request, url) {
   return false;
 }
 
+function isSafeResponse(response) {
+  if (!response || !response.ok || response.type !== 'basic') return false;
+  const cacheControl = response.headers.get('cache-control') || '';
+  if (/\b(private|no-store)\b/i.test(cacheControl)) return false;
+  if (response.headers.has('set-cookie')) return false;
+  return true;
+}
+
+async function precacheShell() {
+  const cache = await caches.open(CACHE);
+  await Promise.all(APP_SHELL.map(async (path) => {
+    try {
+      const request = new Request(path, { credentials: 'omit', cache: 'reload' });
+      const response = await fetch(request);
+      if (isSafeResponse(response)) await cache.put(request, response.clone());
+    } catch (_) {}
+  }));
+}
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(precacheShell());
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    Promise.all([
+      caches.keys().then((keys) => Promise.all(
+        keys
+          .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE)
+          .map((key) => caches.delete(key))
+      )),
+      self.clients.claim(),
+    ])
+  );
+});
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
@@ -52,9 +76,10 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request, { cache: 'no-store' })
-        .then((response) => response)
-        .catch(() => caches.match(OFFLINE))
+      fetch(request, { cache: 'no-store' }).catch(async () => {
+        const cache = await caches.open(CACHE);
+        return (await cache.match(OFFLINE)) || Response.error();
+      })
     );
     return;
   }
@@ -67,12 +92,15 @@ self.addEventListener('fetch', (event) => {
   });
   if (!allowedStatic) return;
 
-  event.respondWith(
-    caches.match(request).then((cached) => cached || fetch(request, { cache: 'no-store' }).then((response) => {
-      if (!response.ok || response.type !== 'basic') return response;
-      const copy = response.clone();
-      event.waitUntil(caches.open(CACHE).then((cache) => cache.put(request, copy)));
-      return response;
-    }))
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    const cached = await cache.match(request);
+    if (cached) return cached;
+
+    const response = await fetch(request, { cache: 'no-store', credentials: 'omit' });
+    if (isSafeResponse(response)) {
+      event.waitUntil(cache.put(request, response.clone()));
+    }
+    return response;
+  })());
 });
