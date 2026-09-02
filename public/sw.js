@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'crpay-';
-const CACHE = `${CACHE_PREFIX}v12-safe-shell`;
+const CACHE = `${CACHE_PREFIX}v13-safe-shell`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   './',
@@ -26,6 +26,7 @@ function bypass(request, url) {
   if (request.method !== 'GET') return true;
   if (request.headers.has('authorization')) return true;
   if (request.headers.has('cookie')) return true;
+  if (request.headers.has('range')) return true;
   if (url.origin !== self.location.origin) return true;
   if (PRIVATE_PATH.test(url.pathname)) return true;
   if (hasSensitiveQuery(url)) return true;
@@ -37,6 +38,7 @@ function isSafeResponse(response) {
   const cacheControl = response.headers.get('cache-control') || '';
   if (/\b(private|no-store)\b/i.test(cacheControl)) return false;
   if (response.headers.has('set-cookie')) return false;
+  if (response.headers.has('content-range')) return false;
   return true;
 }
 
