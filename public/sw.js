@@ -1,13 +1,13 @@
 const CACHE_PREFIX = 'crpay-';
-const CACHE = `${CACHE_PREFIX}v13-safe-shell`;
+const CACHE = `${CACHE_PREFIX}v14-raster-safe-shell`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './icons/icon-192.svg',
-  './icons/icon-512.svg',
-  './icons/icon-512-maskable.svg',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-512-maskable.png',
 ];
 const PRIVATE_PATH = /\/(api|auth|login|logout|admin|session|sessions|token|tokens|password|account|profile|me)(\/|$)/i;
 const SENSITIVE_QUERY_KEYS = new Set([
@@ -26,7 +26,7 @@ function bypass(request, url) {
   if (request.method !== 'GET') return true;
   if (request.headers.has('authorization')) return true;
   if (request.headers.has('cookie')) return true;
-  if (request.headers.has('range')) return true;
+  if (request.headers.has('range') || request.headers.has('if-range')) return true;
   if (url.origin !== self.location.origin) return true;
   if (PRIVATE_PATH.test(url.pathname)) return true;
   if (hasSensitiveQuery(url)) return true;
@@ -34,7 +34,7 @@ function bypass(request, url) {
 }
 
 function isSafeResponse(response) {
-  if (!response || !response.ok || response.status === 206 || response.type !== 'basic') return false;
+  if (!response || !response.ok || response.status === 206 || response.type !== 'basic' || response.redirected) return false;
   const cacheControl = response.headers.get('cache-control') || '';
   if (/\b(private|no-store)\b/i.test(cacheControl)) return false;
   if (response.headers.has('set-cookie')) return false;
@@ -46,7 +46,7 @@ async function precacheShell() {
   const cache = await caches.open(CACHE);
   await Promise.all(APP_SHELL.map(async (path) => {
     try {
-      const request = new Request(path, { credentials: 'omit', cache: 'reload' });
+      const request = new Request(path, { credentials: 'omit', cache: 'reload', redirect: 'error' });
       const response = await fetch(request);
       if (isSafeResponse(response)) await cache.put(request, response.clone());
     } catch (_) {}
@@ -59,16 +59,10 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    Promise.all([
-      caches.keys().then((keys) => Promise.all(
-        keys
-          .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE)
-          .map((key) => caches.delete(key))
-      )),
-      self.clients.claim(),
-    ])
-  );
+  event.waitUntil(Promise.all([
+    caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE).map((key) => caches.delete(key)))),
+    self.clients.claim(),
+  ]));
 });
 
 self.addEventListener('fetch', (event) => {
@@ -78,7 +72,7 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request, { cache: 'no-store' }).catch(async () => {
+      fetch(request, { cache: 'no-store', redirect: 'error' }).catch(async () => {
         const cache = await caches.open(CACHE);
         return (await cache.match(OFFLINE)) || Response.error();
       })
@@ -87,22 +81,15 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.search) return;
-
-  const allowedStatic = APP_SHELL.some((path) => {
-    const absolute = new URL(path, self.registration.scope).href;
-    return request.url === absolute;
-  });
+  const allowedStatic = APP_SHELL.some((path) => new URL(path, self.registration.scope).href === request.url);
   if (!allowedStatic) return;
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const cached = await cache.match(request);
     if (cached) return cached;
-
-    const response = await fetch(request, { cache: 'no-store', credentials: 'omit' });
-    if (isSafeResponse(response)) {
-      event.waitUntil(cache.put(request, response.clone()));
-    }
+    const response = await fetch(request, { cache: 'no-store', credentials: 'omit', redirect: 'error' });
+    if (isSafeResponse(response)) event.waitUntil(cache.put(request, response.clone()));
     return response;
   })());
 });
