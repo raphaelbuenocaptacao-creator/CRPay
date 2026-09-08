@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'crpay-';
-const CACHE = `${CACHE_PREFIX}v15-raster-safe-shell`;
+const CACHE = `${CACHE_PREFIX}v16-private-vary-safe-shell`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   './',
@@ -40,7 +40,7 @@ function isSafeResponse(response) {
   if (response.headers.has('set-cookie')) return false;
   if (response.headers.has('content-range')) return false;
   const vary = response.headers.get('vary') || '';
-  if (/(^|,)\s*(cookie|authorization)\s*(,|$)/i.test(vary)) return false;
+  if (/(^|,)\s*(\*|cookie|authorization)\s*(,|$)/i.test(vary)) return false;
   return true;
 }
 
