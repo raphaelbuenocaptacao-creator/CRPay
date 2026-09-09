@@ -35,7 +35,7 @@ window.CRPayPWA = {
 if ('serviceWorker' in navigator && secureServiceWorkerOrigin) {
   window.addEventListener('load', async () => {
     try {
-      const registration = await navigator.serviceWorker.register(`${baseUrl}sw.js?v=16-private-vary-safe`, {
+      const registration = await navigator.serviceWorker.register(`${baseUrl}sw.js?v=17-private-vary-range-safe-shell`, {
         scope: baseUrl,
         updateViaCache: 'none',
       });
