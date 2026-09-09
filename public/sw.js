@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'crpay-';
-const CACHE = `${CACHE_PREFIX}v16-private-vary-safe-shell`;
+const CACHE = `${CACHE_PREFIX}v17-private-vary-range-safe-shell`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   './',
@@ -33,14 +33,22 @@ function bypass(request, url) {
   return false;
 }
 
+function hasUnsafeVary(response) {
+  const vary = response.headers.get('vary') || '';
+  if (!vary) return false;
+  return vary
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .some((value) => value === '*' || value === 'cookie' || value === 'authorization' || value === 'range');
+}
+
 function isSafeResponse(response) {
   if (!response || !response.ok || response.status === 206 || response.type !== 'basic' || response.redirected) return false;
   const cacheControl = response.headers.get('cache-control') || '';
   if (/\b(private|no-store)\b/i.test(cacheControl)) return false;
   if (response.headers.has('set-cookie')) return false;
   if (response.headers.has('content-range')) return false;
-  const vary = response.headers.get('vary') || '';
-  if (/(^|,)\s*(\*|cookie|authorization)\s*(,|$)/i.test(vary)) return false;
+  if (hasUnsafeVary(response)) return false;
   return true;
 }
 
