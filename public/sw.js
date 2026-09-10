@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'crpay-';
-const CACHE = `${CACHE_PREFIX}v17-private-vary-range-safe-shell`;
+const CACHE = `${CACHE_PREFIX}v18-private-vary-range-safe-shell`;
 const OFFLINE = './index.html';
 const APP_SHELL = [
   './',
@@ -39,7 +39,7 @@ function hasUnsafeVary(response) {
   return vary
     .split(',')
     .map((value) => value.trim().toLowerCase())
-    .some((value) => value === '*' || value === 'cookie' || value === 'authorization' || value === 'range');
+    .some((value) => value === '*' || value === 'cookie' || value === 'authorization' || value === 'range' || value === 'if-range');
 }
 
 function isSafeResponse(response) {
