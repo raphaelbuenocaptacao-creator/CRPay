@@ -1,0 +1,50 @@
+name: CRPay PWA Audit
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pwa-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate CRPay PWA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f public/manifest.webmanifest
+          test -f public/sw.js
+          test -f public/icons/icon-192.png
+          test -f public/icons/icon-512.png
+          test -f public/icons/icon-512-maskable.png
+          test -f src/main.jsx
+          python3 - <<'PY'
+          import json, re
+          from pathlib import Path
+
+          manifest = json.loads(Path('public/manifest.webmanifest').read_text())
+          for key in ('name','short_name','start_url','scope','display','theme_color','background_color','icons'):
+              assert manifest.get(key), f'manifest missing {key}'
+          assert manifest['display'] in ('standalone','fullscreen','minimal-ui')
+          assert any(i.get('sizes') == '192x192' for i in manifest['icons'])
+          assert any(i.get('sizes') == '512x512' for i in manifest['icons'])
+          assert any(i.get('sizes') == '512x512' and 'maskable' in i.get('purpose','') for i in manifest['icons'])
+
+          sw = Path('public/sw.js').read_text()
+          main = Path('src/main.jsx').read_text()
+          m = re.search(r"const CACHE = `\$\{CACHE_PREFIX\}([^`]+)`", sw)
+          assert m, 'service worker cache version not found'
+          version = m.group(1)
+          assert f'sw.js?v={version}' in main, f'registration not aligned to {version}'
+          assert "updateViaCache: 'none'" in main or 'updateViaCache:"none"' in main or 'updateViaCache: "none"' in main
+          for needle in ('authorization','cookie','range','if-range','no-store','private','set-cookie','content-range'):
+              assert needle in sw.lower(), f'sw guard missing: {needle}'
+          assert 'key.startsWith(CACHE_PREFIX)' in sw
+          assert 'beforeinstallprompt' in main
+          print('CRPay PWA contract OK:', version)
+          PY
