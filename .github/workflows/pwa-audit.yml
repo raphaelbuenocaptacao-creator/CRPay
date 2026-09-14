@@ -2,6 +2,8 @@ name: CRPay PWA Audit
 
 on:
   push:
+    branches: [main, 'audit/**']
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -46,5 +48,10 @@ jobs:
               assert needle in sw.lower(), f'sw guard missing: {needle}'
           assert 'key.startsWith(CACHE_PREFIX)' in sw
           assert 'beforeinstallprompt' in main
+          assert "document.addEventListener('visibilitychange'" in main, 'missing foreground update check'
+          assert "document.visibilityState === 'visible'" in main and 'registration.update()' in main, 'missing refresh-on-resume'
+          assert "navigator.serviceWorker.addEventListener('controllerchange'" in main, 'missing controller handoff'
+          assert 'navigator.serviceWorker.controller' in main, 'controller handoff must distinguish first install from update'
+          assert re.search(r"if\s*\(\s*!hadController\s*\)", main), 'first install must not force a reload'
           print('CRPay PWA contract OK:', version)
           PY
