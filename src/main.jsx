@@ -35,6 +35,7 @@ window.CRPayPWA = {
 if ('serviceWorker' in navigator && secureServiceWorkerOrigin) {
   window.addEventListener('load', async () => {
     try {
+      const hadController = Boolean(navigator.serviceWorker.controller);
       const registration = await navigator.serviceWorker.register(`${baseUrl}sw.js?v=v18-private-vary-range-safe-shell`, {
         scope: baseUrl,
         updateViaCache: 'none',
@@ -47,6 +48,7 @@ if ('serviceWorker' in navigator && secureServiceWorkerOrigin) {
 
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController) return;
         if (refreshing) return;
         refreshing = true;
         window.location.reload();
